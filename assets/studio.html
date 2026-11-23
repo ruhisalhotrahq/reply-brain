@@ -220,13 +220,24 @@ function backfill(){if(brain.example||brain.journalSeeded)return;
 const ui={view:'studio',session:newSession(),sync:'This browser only',learning:false,runs:null,runDate:null,edits:{},moves:{},localStatus:{}};
 function newSession(){return{tweet:'',author:'',tier:'stranger',drafts:[],held:[],situation:null,note:'',busy:false,error:''}}
 
-function loadLocal(){try{const t=localStorage.getItem(KEY);if(t)brain=normalize(JSON.parse(t))}catch(e){}}
+/* Sync rule: the account copy is the source of truth. This browser's copy may only replace it when it was
+   built on the exact account version currently stored (base) and has been edited since. A copy that was never
+   synced, or was built on an older account version, is discarded in favour of the account copy. */
+let base=null;
+function loadLocal(){try{const t=localStorage.getItem(KEY);if(t)brain=normalize(JSON.parse(t));const b=localStorage.getItem(KEY+'-base');base=b?Number(b):null}catch(e){}}
+function setBase(t){base=t;try{localStorage.setItem(KEY+'-base',String(t))}catch(e){}}
+function storeLocal(){try{localStorage.setItem(KEY,JSON.stringify(brain))}catch(e){}}
 let saveT=null,writing=false,dirty=false;
-function save(){brain.updatedAt=now();prune();try{localStorage.setItem(KEY,JSON.stringify(brain))}catch(e){}
+function save(){brain.updatedAt=now();prune();storeLocal();
   clearTimeout(saveT);saveT=setTimeout(pushDb,700)}
-async function pushDb(){if(!cap.ref)return;if(writing){dirty=true;return}writing=true;
-  try{await cap.ref.set(clone(brain));setSync('Saved to your account')}catch(e){setSync('Saved in this browser only')}
+async function pushDb(){if(!cap.ref||!cap.linked||brain.example)return;if(writing){dirty=true;return}writing=true;
+  try{const body=clone(brain);await cap.ref.set(body);setBase(body.updatedAt);setSync('Saved to your account')}catch(e){setSync('Saved in this browser only')}
   writing=false;if(dirty){dirty=false;pushDb()}}
+function adoptRemote(remote){brain=normalize(clone(remote));setBase(remote.updatedAt||0);storeLocal();render()}
+async function dailyBackup(db,uid,remote){try{if(!remote||!remote.setupDone)return;
+  const col=db.doc('data/users/'+uid+'/backups').collection('days'),ref=col.doc(todayStr());
+  const have=await ref.get();if(!have.exists)await ref.set(clone(remote));
+  const all=await col.get();const ids=all.docs.map(d=>d.id).sort();for(const id of ids.slice(0,Math.max(0,ids.length-14)))await col.doc(id).delete()}catch(e){}}
 function setSync(t){ui.sync=t;const el=document.querySelector('.sync');if(el)el.textContent=t}
 function prune(){const led=brain.ledger;if(led.length<=LEDGER_MAX)return;const extra=led.length-LEDGER_MAX;
   const order=led.slice().sort((a,b)=>((a.action!=='skipped')-(b.action!=='skipped'))||((!a.learned)-(!b.learned))||(a.at-b.at));
@@ -236,11 +247,16 @@ async function connect(){
   if(!window.claude||!window.claude.use){return}
   const [sample,db,user,dl]=await Promise.all(['sample','db','user','downloads'].map(n=>window.claude.use(n).catch(()=>null)));
   cap.sample=sample;cap.dl=dl;
-  if(db&&user){try{const uid=await user.id();if(uid){cap.ref=db.doc('data/users/'+uid+'/brain');
-    const snap=await Promise.race([cap.ref.get(),new Promise((_,rej)=>setTimeout(()=>rej({code:'timeout'}),10000))]);
+  if(db&&user){try{const uid=await user.id();if(uid){const ref=db.doc('data/users/'+uid+'/brain');
+    const snap=await Promise.race([ref.get(),new Promise((_,rej)=>setTimeout(()=>rej({code:'timeout'}),10000))]);
     const remote=snap.exists?snap.data():null;
-    if(remote&&(remote.updatedAt||0)>(brain.updatedAt||0)){brain=normalize(clone(remote));try{localStorage.setItem(KEY,JSON.stringify(brain))}catch(e){}render()}
-    else if(brain.updatedAt){pushDb()}
+    cap.ref=ref;
+    if(remote){const ownEdits=base!==null&&base===(remote.updatedAt||0)&&(brain.updatedAt||0)>base&&!brain.example;
+      if(ownEdits){cap.linked=true;pushDb()}else{adoptRemote(remote);cap.linked=true}
+      dailyBackup(db,uid,remote)}
+    else{cap.linked=true;if(brain.updatedAt&&!brain.example)pushDb()}
+    ref.onSnapshot(s=>{if(s.metadata&&s.metadata.hasPendingWrites)return;const d=s.exists?s.data():null;
+      if(d&&(d.updatedAt||0)>(brain.updatedAt||0)&&!writing){adoptRemote(d)}},()=>{});
     setSync('Saved to your account');
     cap.jcol=db.doc('data/users/'+uid+'/journal').collection('entries');
     subscribeRuns(db,uid);
