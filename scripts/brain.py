@@ -100,7 +100,7 @@ def blank():
         "version": 2, "updatedAt": 0, "setupDone": False,
         "identity": {"handle": "", "who": "I", "role": "", "audience": "", "reaction": ""},
         "traits": [], "matrix": [], "positions": [], "never": [], "style": {}, "banned": [],
-        "material": [], "interview": [], "approaches": [], "ledger": [], "rules": [],
+        "material": [], "background": [], "interview": [], "approaches": [], "ledger": [], "rules": [],
         "caps": {"perDay": 20, "perPersonWeek": 2, "stopAfter": 3},
         "schedule": {"goal": 20, "days": [1, 2, 3, 4, 5], "time": "09:00", "freshHours": 24,
                      "topics": [], "watch": [], "avoid": []},
@@ -250,6 +250,14 @@ def build_prompt(b, tweet, author="", tier="stranger"):
     if mat:
         L.append("\nFRESH MATERIAL from this person's recent weeks (use at most one, only if relevant)")
         L += [f"- [{m['id']}] {m['text']}" for m in mat]
+    bg = b.get("background") or []
+    if bg:
+        facts = [x for x in bg if x.get("kind") == "fact"]
+        lru = lambda k: sorted([x for x in bg if x.get("kind") == k], key=lambda x: (x.get("lastUsed", 0), x.get("uses", 0)))[:5]
+        rest = lru("story") + lru("proof")
+        L.append("\nBACKGROUND: true things about this person, from their own notes. Use at most one, and only when the tweet "
+                 "clearly invites it (a story move, or proof for a belief). Never invent, embellish or add details beyond these.")
+        L += [f"- [{x['id']}] ({x.get('kind', 'fact')}) {x['text']}" for x in facts + rest]
     if b["never"]:
         L.append("\nNEVER\n" + "\n".join(f"- {x}" for x in b["never"]))
     style = [STYLE_TEXT[k][v] for k, v in b.get("style", {}).items() if k in STYLE_TEXT and v in STYLE_TEXT[k]]
@@ -290,7 +298,7 @@ def build_prompt(b, tweet, author="", tier="stranger"):
         "Return only JSON:\n"
         '{"situation":"<id>","replies":[{"move":"<' + "|".join(m for m in MOVES if m != "skip") + '>",'
         '"text":"...","approach":"<one sentence: what this reply is doing>","position":"<id or null>",'
-        '"material":"<id or null>"}],"note":""}'
+        '"material":"<id or null>","background":"<id or null>"}],"note":""}'
     )
     return "\n".join(L)
 
@@ -347,19 +355,26 @@ def cmd_init(a):
 def cmd_profile(a):
     b = load(a)
     data = json.loads(pathlib.Path(a.file).read_text())
-    allowed = ["identity", "traits", "matrix", "positions", "never", "style", "banned", "interview", "approaches"]
+    allowed = ["identity", "traits", "matrix", "positions", "never", "style", "banned", "interview", "approaches", "background"]
     for k in allowed:
         if k in data:
             if k == "identity":
                 b["identity"].update(data[k])
             else:
                 b[k] = data[k]
+    for x in b["background"]:
+        x.setdefault("id", new_id("b"))
+        x.setdefault("kind", "fact")
+        x.setdefault("uses", 0)
+        x.setdefault("lastUsed", 0)
     for p in b["positions"]:
         p.setdefault("id", new_id("p"))
         p.setdefault("uses", 0)
         p.setdefault("lastUsed", 0)
     b["setupDone"] = True
     save(a, b)
+    for x in data.get("background", []):
+        record(a, "background", kind=x.get("kind", "fact"), text=x.get("text", ""), source=data.get("source", ""))
     for x in data.get("interview", []):
         record(a, "answer", q=x.get("q", ""), a=x.get("a", ""))
     for x in data.get("approaches", []):
@@ -394,7 +409,7 @@ def cmd_log(a):
         "id": new_id("e"), "at": now(), "tweet": a.tweet, "author": (a.author or "").lstrip("@"), "url": a.url,
         "tier": a.tier, "situation": a.situation, "move": a.move, "draft": a.draft, "final": final,
         "action": a.action, "tags": [t.strip() for t in (a.tags or "").split(",") if t.strip()],
-        "position": a.position, "material": a.material, "result": None, "learned": False,
+        "position": a.position, "material": a.material, "background": a.background, "result": None, "learned": False,
     }
     b["ledger"].append(e)
     if a.action != "skipped":
@@ -405,6 +420,10 @@ def cmd_log(a):
         for m in b["material"]:
             if m["id"] == a.material:
                 m["uses"] = m.get("uses", 0) + 1
+        for x in b.get("background", []):
+            if x["id"] == a.background:
+                x["uses"] = x.get("uses", 0) + 1
+                x["lastUsed"] = e["at"]
     save(a, b)
     record(a, "reply", action=e["action"], tweet=e["tweet"], author=e["author"], url=e["url"], situation=e["situation"],
            move=e["move"], draft=e["draft"], final=e["final"], tags=e["tags"])
@@ -551,6 +570,8 @@ def record_markdown(entries):
     sec("Replies", ["reply", "result"], rep)
     sec("Rules and material", ["rule", "material"],
         lambda e: L.append(f"- {day(e['at'])} · {'Rule' if e['type'] == 'rule' else 'Material'}: {e.get('text', '')}"))
+    sec("Background", ["background"],
+        lambda e: L.append(f"- {day(e['at'])} · {e.get('kind', 'fact').capitalize()}: {e.get('text', '')}"))
     return "\n".join(L)
 
 
@@ -628,7 +649,7 @@ def main():
     s.add_argument("--situation", choices=list(SITUATIONS)); s.add_argument("--move", choices=list(MOVES))
     s.add_argument("--draft", required=True); s.add_argument("--final")
     s.add_argument("--action", required=True, choices=["used", "edited", "skipped"])
-    s.add_argument("--tags"); s.add_argument("--url"); s.add_argument("--position"); s.add_argument("--material"); s.set_defaults(fn=cmd_log)
+    s.add_argument("--tags"); s.add_argument("--url"); s.add_argument("--position"); s.add_argument("--material"); s.add_argument("--background"); s.set_defaults(fn=cmd_log)
     sub.add_parser("pending").set_defaults(fn=cmd_pending)
     s = sub.add_parser("result"); s.add_argument("--id", required=True)
     s.add_argument("--replied", required=True, choices=["yes", "no"]); s.set_defaults(fn=cmd_result)

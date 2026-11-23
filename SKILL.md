@@ -63,6 +63,19 @@ python3 scripts/brain.py init
 python3 scripts/brain.py profile --file /path/to/profile.json
 ```
 
+## Workflow 1b: import an about-me file or folder
+
+When the person points at notes about themselves (an "about me" folder, a bio, a career doc), turn them into `background` items so replies can draw on real facts, stories and numbers.
+
+1. Read every file in full.
+2. Leave out anything the notes mark as private, confidential or not for public use, plus salary, job-search status, health, family hardships and names of references. Replies are public. If unsure, leave it out and say so.
+3. Write short items, one fact, story or number each, in the person's own words where possible: `{"kind": "fact|story|proof", "text": "..."}`. Keep any usage rule attached to the item (for example "never name the company").
+4. Add new personality traits and "never" rules only when the notes state them plainly. Fill in an empty belief `proof` only with a number or story from the notes.
+5. Save with `profile --file` (chat) or an ArtifactData `update` of the brain doc pinned to its version (studio). Re-read and merge if the version moved. Append one `background` record entry per item.
+6. Tell the person what went in and what was left out, by category.
+
+Background items never expire. The drafting prompt lists all facts plus the five least-used stories and five least-used numbers, and a reply uses at most one.
+
 ## Workflow 2: draft replies to a tweet
 
 ```bash

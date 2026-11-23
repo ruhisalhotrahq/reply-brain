@@ -97,7 +97,8 @@ ArtifactData `set`, collection `data/users/me/runs/days`, doc_id today's date (`
       "reply": "the main draft",
       "approach": "one sentence on what the reply does",
       "alternates": [{"move": "ask", "text": "..."}],
-      "position": null
+      "position": null,
+      "background": null
     }
   ],
   "rejected": [
