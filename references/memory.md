@@ -27,6 +27,7 @@ Every field exists to stop one specific way replies get worse over time.
   "style": {"length": "short", "casing": "sentence", "edge": "blunt", "humor": "dry", "emoji": "never"},
   "banned": ["extra phrases to block"],
   "material": [{"id": "m1", "text": "something real from this week", "at": 0, "uses": 0}],
+  "feedback": [{"id": "f1", "at": 0, "text": "why a draft was not me, in my words", "draft": "", "tweet": "", "author": "", "url": "", "status": "open | done"}],
   "background": [{"id": "b1", "kind": "fact | story | proof", "text": "", "uses": 0, "lastUsed": 0}],
   "interview": [{"q": "", "a": ""}],
   "approaches": [{"situation": "", "tweet": "", "move": "", "note": ""}],
@@ -64,6 +65,7 @@ Moves: `add` add what I know, `ask` ask a specific question, `pushback` disagree
 |---|---|
 | `matrix` | Replies that are well written but not what this person would do in that situation |
 | `positions` with `uses` and `lastUsed` | The same three takes repeated. Least recently used are offered first |
+| `feedback` | The person knowing exactly what is wrong but having no way to say it beyond a tag. Open notes go into every prompt until the person marks them fixed |
 | `background` | Generic replies with nothing of the person in them, and invented credentials. Only listed facts, stories and numbers may be used; least used offered first |
 | `material` | Running out of fresh stories. Unused items are offered first, items older than 30 days are marked stale |
 | Ledger `final` text | Sliding back to a generic AI voice. Posted replies are the examples in every prompt |
@@ -95,6 +97,7 @@ The brain is a working memory: it is bounded, pruned and rewritten. The record i
 | `result` | `final`, `author`, `replied` |
 | `rule`, `material` | `text` |
 | `background` | `kind`, `text`, `source` |
+| `feedback` | `text`, `draft`, `tweet`, `author`, `url` |
 
 Every entry also has `id`, `at` (milliseconds) and `type`.
 

@@ -100,7 +100,7 @@ def blank():
         "version": 2, "updatedAt": 0, "setupDone": False,
         "identity": {"handle": "", "who": "I", "role": "", "audience": "", "reaction": ""},
         "traits": [], "matrix": [], "positions": [], "never": [], "style": {}, "banned": [],
-        "material": [], "background": [], "interview": [], "approaches": [], "ledger": [], "rules": [],
+        "material": [], "background": [], "feedback": [], "interview": [], "approaches": [], "ledger": [], "rules": [],
         "caps": {"perDay": 20, "perPersonWeek": 2, "stopAfter": 3},
         "schedule": {"goal": 20, "days": [1, 2, 3, 4, 5], "time": "09:00", "freshHours": 24,
                      "topics": [], "watch": [], "avoid": []},
@@ -267,6 +267,11 @@ def build_prompt(b, tweet, author="", tier="stranger"):
     rules = [r for r in b["rules"] if r.get("active")]
     if rules:
         L.append("\nRULES LEARNED FROM THIS PERSON'S EDITS (follow all)\n" + "\n".join(f"- {r['text']}" for r in rules))
+    notes = sorted([n for n in b.get("feedback", []) if n.get("status") != "done"], key=lambda n: -n.get("at", 0))[:15]
+    if notes:
+        L.append("\nTHIS PERSON'S OWN NOTES ON WHY RECENT DRAFTS DID NOT SOUND LIKE THEM (newest first). Fix every one. "
+                 "They outrank the style defaults above.")
+        L += [f"- [{n['id']}] {n['text']}" + (f' (about the draft: "{clip(n["draft"], 140)}")' if n.get("draft") else "") for n in notes]
     tags = {}
     for e in b["ledger"][-40:]:
         for tg in e.get("tags", []):
@@ -518,6 +523,31 @@ def cmd_matrix(a):
     print("Matrix row added.")
 
 
+def cmd_feedback(a):
+    b = load(a)
+    b.setdefault("feedback", [])
+    if a.done:
+        for n in b["feedback"]:
+            if n["id"] == a.done:
+                n["status"] = "done"
+                n["doneAt"] = now()
+                save(a, b)
+                print(f"Marked {a.done} done.")
+                return
+        sys.exit(f"No note {a.done}.")
+    if a.add:
+        n = {"id": new_id("f"), "at": now(), "text": a.add, "status": "open", "draft": a.draft or "",
+             "tweet": a.tweet or "", "url": a.url or ""}
+        b["feedback"].append(n)
+        save(a, b)
+        record(a, "feedback", text=a.add, draft=n["draft"], tweet=n["tweet"], url=n["url"])
+        print(f"Saved note {n['id']}.")
+        return
+    for n in b["feedback"]:
+        if n.get("status") != "done":
+            print(f"{n['id']}  {n['text']}" + (f'  (on: "{clip(n["draft"], 80)}")' if n.get("draft") else ""))
+
+
 def cmd_material(a):
     b = load(a)
     b["material"].append({"id": new_id("m"), "text": a.add, "at": now(), "uses": 0})
@@ -570,6 +600,8 @@ def record_markdown(entries):
     sec("Replies", ["reply", "result"], rep)
     sec("Rules and material", ["rule", "material"],
         lambda e: L.append(f"- {day(e['at'])} · {'Rule' if e['type'] == 'rule' else 'Material'}: {e.get('text', '')}"))
+    sec("Your notes", ["feedback"],
+        lambda e: L.append(f"- {day(e['at'])} · {e.get('text', '')}" + (f' (on: "{e["draft"]}")' if e.get("draft") else "")))
     sec("Background", ["background"],
         lambda e: L.append(f"- {day(e['at'])} · {e.get('kind', 'fact').capitalize()}: {e.get('text', '')}"))
     return "\n".join(L)
@@ -660,6 +692,8 @@ def main():
     s = sub.add_parser("matrix"); s.add_argument("--situation", required=True, choices=list(SITUATIONS))
     s.add_argument("--move", required=True, choices=list(MOVES)); s.add_argument("--note"); s.set_defaults(fn=cmd_matrix)
     s = sub.add_parser("material"); s.add_argument("--add", required=True); s.set_defaults(fn=cmd_material)
+    s = sub.add_parser("feedback"); s.add_argument("--add"); s.add_argument("--draft"); s.add_argument("--tweet"); s.add_argument("--url")
+    s.add_argument("--done"); s.set_defaults(fn=cmd_feedback)
     sub.add_parser("stats").set_defaults(fn=cmd_stats)
     s = sub.add_parser("record", help="show or save the permanent record of answers and replies")
     s.add_argument("--out", help="write Markdown to this file instead of printing it")

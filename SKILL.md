@@ -110,6 +110,12 @@ python3 scripts/brain.py pending
 python3 scripts/brain.py result --id ENTRY_ID --replied yes
 ```
 
+## Workflow 3b: notes on why a draft is not them
+
+The person can write, in their own words, why a draft does not sound like them, either on a draft in the daily run or as a general note. Notes live in the brain's `feedback` list and stay open until the person marks them fixed. Every drafting prompt includes the 15 newest open notes, and they outrank the style defaults. The daily run reports what it changed for each note in `feedbackUsed`.
+
+In chat: `brain.py feedback --add "WHY" --draft "THE DRAFT"`, `brain.py feedback` to list open notes, `brain.py feedback --done ID` once the person says it is fixed.
+
 ## Workflow 4: learn (weekly, or after every 5 logged outcomes)
 
 ```bash

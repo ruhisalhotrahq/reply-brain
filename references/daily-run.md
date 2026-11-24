@@ -25,6 +25,7 @@ If Chrome or ArtifactData is not available, go to step 6 (failure) immediately.
 - From the brain's `ledger`, collect every `url` and every author replied to in the last 7 days. Never put a tweet that is already in the ledger into the batch.
 - Apply the caps to each author: no more than `caps.perPersonWeek` replies per person per week, never two days running, and nobody who has ignored `caps.stopAfter` replies in a row.
 - Compute everything from what was posted. A draft that was never posted did not happen.
+- Read the person's open notes: every item in the brain's `feedback` whose `status` is not `done`. Each one is the person saying, in their own words, why a draft did not sound like them. `brain.py context` puts them in every drafting prompt, but read them yourself too and keep them in mind while judging. A note can change which tweets fit (for example "stop replying to growth-hack threads"), not only how a reply is worded.
 
 ## 3. Search X properly
 
@@ -69,6 +70,8 @@ Follow it, keep the first reply (the matrix move) as the main draft and up to tw
 
 Stop drafting once the goal is reached. Rank by: fits the matrix move cleanly, the author is in the audience, freshness, then whether a belief or fresh material applies.
 
+Before writing the batch, reread each open note against the drafts. Any draft that repeats what a note complains about gets rewritten, or rejected with `draft-failed` and the note's id in the reason.
+
 **Never pad.** If fewer than the goal qualify, deliver fewer and name the main cause in `note` (for example "most results were job ads; add more specific topics"). Never lower the bar to reach the number.
 
 ## 5. Write the batch
@@ -85,6 +88,7 @@ ArtifactData `set`, collection `data/users/me/runs/days`, doc_id today's date (`
   "note": "",
   "queries": ["\"first engineering hire\" since:2026-11-15"],
   "scanned": 0,
+  "feedbackUsed": [{"id": "f…", "how": "one sentence on what this batch did differently because of the note"}],
   "candidates": [
     {
       "id": "c1",
@@ -111,7 +115,9 @@ ArtifactData `set`, collection `data/users/me/runs/days`, doc_id today's date (`
 
 Also save the same JSON to `~/.reply-brain/runs/YYYY-MM-DD.json` as a backup.
 
-Finish with a three-line summary: drafts delivered against the goal, rejections by rule, and the main cause of any shortfall.
+`feedbackUsed` has one entry per open note, saying plainly what changed. If a note could not be acted on in this batch (for example it is about a kind of tweet that did not come up), say that instead. The studio shows each line under the note. Never mark a note done: only the person does that.
+
+Finish with a four-line summary: drafts delivered against the goal, rejections by rule, the main cause of any shortfall, and how many of the person's notes were worked on.
 
 ## 6. When it breaks
 

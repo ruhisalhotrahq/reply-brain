@@ -189,7 +189,7 @@ const clip=(t,n)=>{t=String(t||'').replace(/\s+/g,' ').trim();return t.length<=n
 function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2600)}
 
 /* ---------- memory ---------- */
-function blank(){return{version:2,updatedAt:0,setupDone:false,identity:{handle:'',who:'I',role:'',audience:'',reaction:''},traits:[],matrix:[],positions:[],never:[],style:{},banned:[],material:[],background:[],interview:[],approaches:[],ledger:[],rules:[],proposals:[],caps:{perDay:20,perPersonWeek:2,stopAfter:3},
+function blank(){return{version:2,updatedAt:0,setupDone:false,identity:{handle:'',who:'I',role:'',audience:'',reaction:''},traits:[],matrix:[],positions:[],never:[],style:{},banned:[],material:[],background:[],feedback:[],interview:[],approaches:[],ledger:[],rules:[],proposals:[],caps:{perDay:20,perPersonWeek:2,stopAfter:3},
   schedule:{goal:20,days:[1,2,3,4,5],time:'09:00',freshHours:24,topics:[],watch:[],avoid:[]}}}
 function normalize(b){const o=Object.assign(blank(),b||{});o.identity=Object.assign(blank().identity,o.identity||{});o.caps=Object.assign(blank().caps,o.caps||{});o.schedule=Object.assign(blank().schedule,o.schedule||{});
   const have=new Set(o.matrix.map(r=>r.situation));for(const s in SITUATIONS)if(!have.has(s))o.matrix.push({situation:s,move:'add',note:'',skip:false});
@@ -203,6 +203,9 @@ let journal=[];
 function loadJournal(){try{const t=localStorage.getItem(JKEY);if(t){const a=JSON.parse(t);if(Array.isArray(a))journal=a}}catch(e){}}
 function saveJournalLocal(){try{localStorage.setItem(JKEY,JSON.stringify(journal.slice(-3000)))}catch(e){}}
 function jclean(e){const o=Object.assign({},e);delete o.synced;return o}
+function openNotes(b){return(b.feedback||[]).filter(n=>n.status!=='done').slice().sort((x,y)=>y.at-x.at)}
+function addNote(text,ctx){text=String(text||'').trim();if(!text)return null;const n=Object.assign({id:newId('f'),at:now(),text,status:'open'},ctx||{});
+  brain.feedback.push(n);record('feedback',{text,draft:n.draft||'',tweet:n.tweet||'',author:n.author||'',url:n.url||''});save();return n}
 function record(type,data){if(brain.example)return;const e=Object.assign({id:newId('j'),at:now(),type},clone(data||{}));journal.push(e);saveJournalLocal();pushJournal(e)}
 let jq=Promise.resolve();
 function pushJournal(e){if(!cap.jcol||e.synced)return;jq=jq.then(()=>cap.jcol.doc(e.id).set(jclean(e)).then(()=>{e.synced=true;saveJournalLocal()},()=>{}))}
@@ -343,6 +346,8 @@ function buildPrompt(b,tweet,author,tier){const i=b.identity,L=[];
   L.push('\nSTYLE\n'+st.map(x=>'- '+x).join('\n'));
   const rules=b.rules.filter(r=>r.active);if(rules.length)L.push("\nRULES LEARNED FROM THIS PERSON'S EDITS (follow all)\n"+rules.map(r=>'- '+r.text).join('\n'));
   const tags={};for(const e of b.ledger.slice(-40))for(const t of e.tags||[])tags[t]=(tags[t]||0)+1;
+  const fb=openNotes(b).slice(0,15);if(fb.length){L.push("\nTHIS PERSON'S OWN NOTES ON WHY RECENT DRAFTS DID NOT SOUND LIKE THEM (newest first). Fix every one. They outrank the style defaults above.");
+    for(const n of fb)L.push('- ['+n.id+'] '+n.text+(n.draft?' (about the draft: "'+clip(n.draft,140)+'")':''))}
   const tk=Object.keys(tags).sort((x,y)=>tags[y]-tags[x]);if(tk.length)L.push('\nRECENT COMPLAINTS ABOUT DRAFTS: '+tk.map(k=>k+' x'+tags[k]).join(', '));
   const ex=pickExamples(b,6);if(ex.length){L.push('\nREPLIES THIS PERSON ACTUALLY POSTED (match the voice, never copy the wording)');for(const e of ex)L.push('- To "'+clip(e.tweet,110)+'": "'+e.final+'"')}
   const ed=b.ledger.filter(e=>e.action==='edited').slice(-3);if(ed.length){L.push('\nHOW THEY EDIT DRAFTS');for(const e of ed)L.push('- Draft: "'+e.draft+'" -> Posted: "'+e.final+'"')}
@@ -672,7 +677,29 @@ function batchCard(run,c){const key=run.date+'/'+c.id,st=(run.statuses||{})[c.id
       :[h('div',{class:'row'},h('button',{class:'btn',onclick:()=>copy(ui.edits[key],ta)},'Copy reply'),
           c.url&&h('a',{class:'btn',href:c.url,target:'_blank',rel:'noopener noreferrer'},'Open on X'),
           h('button',{class:'btn primary',onclick:()=>batchLog(run,c,ui.edits[key].trim()===String(c.reply||'').trim()?'used':'edited',[])},'I posted this')),
-        h('div',{class:'chips'},h('span',{class:'small muted',style:'align-self:center'},'Skip because:'),TAGS.map(t=>h('button',{class:'chip',onclick:()=>batchLog(run,c,'skipped',[t])},t)))])}
+        h('div',{class:'chips'},h('span',{class:'small muted',style:'align-self:center'},'Skip because:'),TAGS.map(t=>h('button',{class:'chip',onclick:()=>batchLog(run,c,'skipped',[t])},t)))],
+    noteBox(run,c,key,!!st))}
+function noteBox(run,c,key,done){const mine=(brain.feedback||[]).filter(n=>n.runKey===key);
+  const id='n-'+key.replace(/[^a-zA-Z0-9]/g,'-'),ctx=()=>({runKey:key,draft:ui.edits[key]||c.reply||'',tweet:c.tweet||'',author:c.author||'',url:c.url||''});
+  const save1=skip=>{const el=$(id),n=addNote(el&&el.value,ctx());if(!n){toast('Write the note first.');return}
+    if(skip)batchLog(run,c,'skipped',['not me']);else render();toast("Saved. The next run will work on it.")};
+  return h('div',{class:'stack',style:'gap:6px'},
+    mine.map(n=>h('p',{class:'small'},h('span',{class:'pill '+(n.status==='done'?'plain':'warn')},n.status==='done'?'Note, done':'Your note'),' '+n.text)),
+    h('label',{class:'field'},h('span',{class:'label'},'Not you? Say why, in your own words'),
+      h('textarea',{id,rows:2,placeholder:'e.g. I would never open by agreeing. I would ask what their ICP is first.'})),
+    h('div',{class:'row'},h('button',{class:'btn',onclick:()=>save1(false)},'Save note'),!done&&h('button',{class:'btn quiet',onclick:()=>save1(true)},'Save note and skip')))}
+function notesPanel(run){const open=openNotes(brain),used={};for(const u of (run&&run.feedbackUsed)||[])used[u.id]=u.how;
+  return h('section',{class:'block'},h('div',{class:'head'},h('h2',null,'Notes for the next run'),h('span',{class:'muted small'},'Why drafts did not sound like you. Every run reads these first')),
+    h('div',{class:'panel'},
+      h('label',{class:'field'},h('span',{class:'label'},'Add a general note'),h('textarea',{id:'note-general',rows:2,placeholder:'e.g. Too many replies sound like advice. I talk like a friend who has done it, not a coach.'})),
+      h('div',null,h('button',{class:'btn',onclick:()=>{const el=$('note-general');if(addNote(el.value,{})){el.value='';render();toast('Saved. The next run will work on it.')}else toast('Write the note first.')}},'Save note')),
+      open.length?open.map(n=>h('div',{class:'item'},h('p',null,n.text),
+        n.draft&&h('p',{class:'small muted'},(n.author?'On your draft to @'+n.author+': ':'On: ')+'"'+clip(n.draft,140)+'"'),
+        used[n.id]&&h('p',{class:'small'},h('span',{class:'pill good'},'Worked on'),' '+used[n.id]),
+        h('div',{class:'row small muted'},h('span',null,new Date(n.at).toLocaleDateString()),
+          h('button',{class:'btn quiet',onclick:()=>{n.status='done';n.doneAt=now();save();render()}},'Fixed, stop showing it'),
+          h('button',{class:'btn quiet danger',onclick:()=>{brain.feedback=brain.feedback.filter(x=>x!==n);save();render()}},'Remove'))))
+        :h('p',{class:'muted'},'No open notes. Write one on any draft that does not sound like you.')))}
 function runBody(run){const cands=run.candidates||[],rej=run.rejected||[];
   const done=cands.filter(c=>(run.statuses||{})[c.id]||ui.localStatus[run.date+'/'+c.id]);
   const posted=done.filter(c=>{const s=(run.statuses||{})[c.id]||ui.localStatus[run.date+'/'+c.id];return s&&s!=='skipped'}).length;
@@ -714,7 +741,7 @@ function viewRun(){const runs=runList(),s=brain.schedule;
     cap.runsCol&&ui.runs===null&&h('p',{class:'muted'},ui.runsSlow?'Your batches cannot be reached right now. They will appear when the connection comes back.':'Loading your batches…'),
     runs.length>1&&h('div',{class:'chips'},runs.slice(0,10).map(r=>h('button',{class:'chip','aria-pressed':String(sel&&r.date===sel.date),onclick:()=>{ui.runDate=r.date;render()}},r.date===todayStr()?'Today':r.date))),
     sel?runBody(sel):h('div',{class:'empty'},h('h3',null,'No batches yet'),h('p',null,'Set your goal and who to look for below, then set up the run in Claude (steps at the bottom). Each day\'s batch shows up here.')),
-    runSettings(),scheduleHow())}
+    notesPanel(sel),runSettings(),scheduleHow())}
 function runSettings(){const s=brain.schedule;const setS=(k,v)=>{s[k]=v;if(k==='goal')brain.caps.perDay=v;save();render()};
   return h('section',{class:'block'},h('div',{class:'head'},h('h2',null,'Goal and targets'),h('span',{class:'muted small'},'Every run reads these fresh')),
     h('div',{class:'panel'},
@@ -752,9 +779,9 @@ function loadRunFile(){const ta=h('textarea',{id:'run-file-text',rows:8,placehol
     ta,err,h('div',{class:'row'},h('button',{class:'btn primary',onclick:()=>use(ta.value)},'Load'),h('button',{class:'btn quiet',onclick:closeModal},'Cancel'))))}
 
 /* ---------- your record view ---------- */
-const RGROUP={answer:'Interview',approach:'Approaches',profile:'Matrix versions',reply:'Replies',result:'Replies',rule:'Rules and material',material:'Rules and material',background:'Background'};
+const RGROUP={answer:'Interview',approach:'Approaches',profile:'Matrix versions',reply:'Replies',result:'Replies',rule:'Rules and material',material:'Rules and material',background:'Background',feedback:'Your notes'};
 function recLabel(e){if(e.type==='reply')return e.action==='used'?'Posted':e.action==='edited'?'Posted with edits':'Skipped';
-  return{answer:'Interview answer',approach:'Approach',profile:'Matrix version',result:'Result',rule:'Rule added',material:'Material',background:'Background'}[e.type]||e.type}
+  return{answer:'Interview answer',approach:'Approach',profile:'Matrix version',result:'Result',rule:'Rule added',material:'Material',background:'Background',feedback:'Your note'}[e.type]||e.type}
 function recordItem(e){const when=new Date(e.at).toLocaleString([],{dateStyle:'medium',timeStyle:'short'});let body;
   if(e.type==='answer')body=[h('p',{class:'muted small'},e.q),h('p',{style:'white-space:pre-wrap;overflow-wrap:anywhere'},e.a)];
   else if(e.type==='approach')body=[h('p',{class:'tweet'},e.tweet),h('p',null,h('strong',null,MOVES[e.move]||e.move),e.note?' · '+e.note:'')];
@@ -763,9 +790,10 @@ function recordItem(e){const when=new Date(e.at).toLocaleString([],{dateStyle:'m
   else if(e.type==='result')body=[h('p',null,(e.replied?'Got an answer':'No answer')+(e.author?' from @'+e.author:'')+': "'+clip(e.final,140)+'"')];
   else if(e.type==='profile')body=[e.identity&&e.identity.reaction&&h('p',null,'Bar: "'+e.identity.reaction+'"'),
     h('ul',{class:'small',style:'margin:0;padding-left:18px'},(e.matrix||[]).map(r=>h('li',null,(SITUATIONS[r.situation]||r.situation)+': '+(MOVES[r.move]||r.move)+(r.note?' · '+r.note:''))))];
+  else if(e.type==='feedback')body=[h('p',null,e.text),e.draft&&h('p',{class:'small muted'},(e.author?'On your draft to @'+e.author+': ':'On: ')+'"'+e.draft+'"')];
   else body=[h('p',null,e.text)];
   return h('div',{class:'item'},h('div',{class:'row small muted'},h('span',{class:'pill plain'},recLabel(e)),h('span',{class:'num'},when)),body)}
-function viewRecord(){const f=ui.recFilter||'all',groups=['all','Interview','Approaches','Replies','Matrix versions','Rules and material','Background'];
+function viewRecord(){const f=ui.recFilter||'all',groups=['all','Interview','Approaches','Replies','Matrix versions','Rules and material','Background','Your notes'];
   const items=journal.filter(e=>f==='all'||RGROUP[e.type]===f).slice().reverse();
   const n=(t,a)=>journal.filter(e=>e.type===t&&(!a||e.action===a)).length;
   return h('div',{class:'stack',style:'gap:24px'},
@@ -799,6 +827,7 @@ function recordMarkdown(){const day=t=>new Date(t).toISOString().slice(0,10),L=[
     if(e.action!=='used')L.push('  Draft: '+e.draft+(e.tags&&e.tags.length?' ('+e.tags.join(', ')+')':''));
     if(e.action!=='skipped')L.push('  Posted: '+e.final)});
   sec('Rules and material',['rule','material'],e=>L.push('- '+day(e.at)+' · '+(e.type==='rule'?'Rule: ':'Material: ')+e.text));
+  sec('Your notes',['feedback'],e=>L.push('- '+day(e.at)+' · '+e.text+(e.draft?' (on: "'+e.draft+'")':'')));
   sec('Background',['background'],e=>L.push('- '+day(e.at)+' · '+(e.kind||'fact')+': '+e.text));
   return L.join('\n')}
 function deleteRecord(){confirmInline('Delete your whole record? Every saved answer and reply goes, here and in your account. Your current brain is kept. This cannot be undone.',async()=>{

@@ -13,7 +13,7 @@ The studio page is STUDIO_URL. Read the brain from its database and write today'
 Use Claude in Chrome to read x.com. Use ArtifactData for the studio. Use Bash for `~/.claude/skills/reply-brain/scripts/brain.py`.
 
 1. Load the spec, then the brain. Without the brain this run produces generic replies, which is the exact failure it exists to prevent.
-2. Read what was already posted before deciding anything. A draft that was never posted did not happen.
+2. Read what was already posted before deciding anything. A draft that was never posted did not happen. Then read every open note in the brain's `feedback`: the person's own words on why drafts did not sound like them. Act on each one and say how in `feedbackUsed`.
 3. Follow the search method rules: date floor on every query, no likes filter on latest results, real scroll actions.
 4. The goal is in the brain's schedule. Never pad and never lower the bar. If fewer qualify, name the main cause.
 5. If anything breaks (Chrome not connected, login wall, rate limit, studio unreachable): STOP and write a failed run with a note saying what to do. Do not fall back to a weaker source.
