@@ -103,7 +103,8 @@ def blank():
         "material": [], "background": [], "feedback": [], "interview": [], "approaches": [], "ledger": [], "rules": [],
         "caps": {"perDay": 20, "perPersonWeek": 2, "stopAfter": 3},
         "schedule": {"goal": 20, "days": [1, 2, 3, 4, 5], "time": "09:00", "freshHours": 24,
-                     "topics": [], "watch": [], "avoid": []},
+                     "topics": [], "watch": [], "avoid": [],
+                     "highShare": 20, "minLikes": 50, "minReplies": 50},
     }
 
 

@@ -154,6 +154,8 @@ Read `references/finding.md` first. Finding needs a way to read X (a browser too
 
 ## Workflow 7: the daily run (scheduled)
 
+Each batch reserves a share of the goal (`schedule.highShare`, default 20%) for high-engagement tweets: more than `minLikes` likes and more than `minReplies` comments (default 50 each). Those tweets still pass every other rule. If not enough exist, the batch says so and never pads.
+
 The person sets a daily goal (20 to 50 drafts), the days, the topics and the accounts to watch or avoid in the studio's **Daily run** tab. A scheduled task in the Claude desktop app then reads X in Chrome at the chosen time and writes that day's batch back to the studio, where each tweet has its link, its drafted reply, and every rejected tweet has its reason.
 
 Follow `references/daily-run.md` exactly when a run fires. It is the governing spec for the run. Do not improvise a simpler version.

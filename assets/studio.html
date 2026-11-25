@@ -190,7 +190,7 @@ function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTime
 
 /* ---------- memory ---------- */
 function blank(){return{version:2,updatedAt:0,setupDone:false,identity:{handle:'',who:'I',role:'',audience:'',reaction:''},traits:[],matrix:[],positions:[],never:[],style:{},banned:[],material:[],background:[],feedback:[],interview:[],approaches:[],ledger:[],rules:[],proposals:[],caps:{perDay:20,perPersonWeek:2,stopAfter:3},
-  schedule:{goal:20,days:[1,2,3,4,5],time:'09:00',freshHours:24,topics:[],watch:[],avoid:[]}}}
+  schedule:{goal:20,days:[1,2,3,4,5],time:'09:00',freshHours:24,topics:[],watch:[],avoid:[],highShare:20,minLikes:50,minReplies:50}}}
 function normalize(b){const o=Object.assign(blank(),b||{});o.identity=Object.assign(blank().identity,o.identity||{});o.caps=Object.assign(blank().caps,o.caps||{});o.schedule=Object.assign(blank().schedule,o.schedule||{});
   const have=new Set(o.matrix.map(r=>r.situation));for(const s in SITUATIONS)if(!have.has(s))o.matrix.push({situation:s,move:'add',note:'',skip:false});
   o.matrix=o.matrix.filter(r=>SITUATIONS[r.situation]);o.matrix.sort((a,b)=>Object.keys(SITUATIONS).indexOf(a.situation)-Object.keys(SITUATIONS).indexOf(b.situation));
@@ -666,7 +666,9 @@ function batchCard(run,c){const key=run.date+'/'+c.id,st=(run.statuses||{})[c.id
   paint();
   const mv=ui.moves[key]||c.move;
   return h('div',{class:'draft'+(st&&st!=='skipped'?' done':'')},
-    h('div',{class:'meta'},h('span',null,h('strong',null,'@'+c.author),c.postedAt&&h('span',{class:'muted small'},' · '+ago(c.postedAt))),
+    h('div',{class:'meta'},h('span',null,h('strong',null,'@'+c.author),c.postedAt&&h('span',{class:'muted small'},' · '+ago(c.postedAt)),
+        c.highEngagement&&h('span',{class:'pill good',style:'margin-left:8px'},'High engagement'),
+        (c.likes!=null||c.replies!=null)&&h('span',{class:'muted small num'},' · '+(c.likes!=null?c.likes+' likes':'')+(c.likes!=null&&c.replies!=null?' · ':'')+(c.replies!=null?c.replies+' comments':''))),
       c.url&&h('a',{href:c.url,target:'_blank',rel:'noopener noreferrer',class:'small'},'Open on X ↗')),
     h('p',{class:'tweet'},c.tweet),
     h('div',{class:'meta'},h('span',{class:'pill plain'},(SITUATIONS[c.situation]||'Tweet')+' → '+(MOVES[mv]||mv)),c.approach&&h('span',{class:'small muted',style:'flex:1;min-width:160px'},c.approach)),
@@ -710,6 +712,7 @@ function runBody(run){const cands=run.candidates||[],rej=run.rejected||[];
   out.push(h('div',{class:'panel'},
     h('div',{class:'row'},h('span',{class:'pill '+(cands.length>=(run.goal||0)?'good':'warn')},cands.length+' of '+(run.goal||cands.length)+' drafted'),
       run.status==='partial'&&h('span',{class:'pill warn'},'Stopped early'),
+      run.highTarget!=null&&h('span',{class:'pill '+((run.highFound||0)>=run.highTarget?'good':'warn')},(run.highFound||0)+' of '+run.highTarget+' high engagement'),
       h('span',{class:'small'},h('strong',{class:'num'},posted),' posted · ',h('strong',{class:'num'},done.length-posted),' skipped · ',h('strong',{class:'num'},cands.length-done.length),' left'),
       h('span',{class:'small muted'},(run.scanned?run.scanned+' tweets read · ':'')+rej.length+' rejected'+(run.finishedAt?' · finished '+new Date(run.finishedAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''))),
     run.note&&h('p',{class:'notice'},run.note)));
@@ -750,6 +753,11 @@ function runSettings(){const s=brain.schedule;const setS=(k,v)=>{s[k]=v;if(k==='
       h('div',{class:'grid2'},
         h('div',{class:'field'},h('span',{class:'label'},'Days'),h('div',{class:'chips'},DAYS.map(([d,l])=>h('button',{class:'chip','aria-pressed':String(s.days.includes(d)),onclick:()=>setS('days',s.days.includes(d)?s.days.filter(x=>x!==d):s.days.concat(d))},l)))),
         h('label',{class:'field'},h('span',{class:'label'},'Time'),h('input',{type:'time',id:'run-time',value:s.time,onchange:e=>{s.time=e.target.value||'09:00';save();render()}}))),
+      h('div',{class:'field'},h('span',{class:'label'},'Share of high-engagement tweets'),seg('high',s.highShare,[[0,'Off'],[10,'10%'],[20,'20%'],[30,'30%'],[50,'50%']],v=>setS('highShare',v)),
+        s.highShare>0&&h('span',{class:'small muted'},Math.round(s.goal*s.highShare/100)+' of '+s.goal+' drafts go to tweets with more than '+s.minLikes+' likes and more than '+s.minReplies+' comments. If fewer exist, the batch says so and fills the rest with normal ones.')),
+      s.highShare>0&&h('div',{class:'grid2'},
+        h('label',{class:'field'},h('span',{class:'label'},'More than this many likes'),h('input',{type:'number',min:0,id:'run-minlikes',value:s.minLikes,onchange:e=>setS('minLikes',Math.max(0,parseInt(e.target.value,10)||0))})),
+        h('label',{class:'field'},h('span',{class:'label'},'More than this many comments'),h('input',{type:'number',min:0,id:'run-minreplies',value:s.minReplies,onchange:e=>setS('minReplies',Math.max(0,parseInt(e.target.value,10)||0))}))),
       h('div',{class:'field'},h('span',{class:'label'},'Only tweets newer than'),seg('fresh',s.freshHours,[[6,'6 hours'],[12,'12 hours'],[24,'1 day'],[48,'2 days']],v=>setS('freshHours',v))),
       h('label',{class:'field'},h('span',{class:'label'},'Topics and phrases to search'),h('textarea',{id:'run-topics',rows:5,placeholder:'One per line, in the words your audience would use, e.g. "hiring our first engineer"',value:s.topics.join('\n'),onchange:e=>{s.topics=lines(e.target.value);save()}})),
       h('div',null,h('button',{class:'btn',disabled:!!ui.suggesting,onclick:suggestTopics},ui.suggesting?'Thinking…':'Suggest phrases from my matrix')),

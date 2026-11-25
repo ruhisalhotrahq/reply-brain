@@ -17,7 +17,7 @@ If Chrome or ArtifactData is not available, go to step 6 (failure) immediately.
 1. Read the whole `SKILL.md` and `references/finding.md`.
 2. Download the brain: ArtifactData `get`, collection `data/users/me`, doc_id `brain`, with `out_dir` set to `~/.reply-brain/run-cache`. The result names the file it wrote. Use it as `--brain` for every `brain.py` call in this run.
 3. If the document does not exist or `setupDone` is false, stop: write a failed run (step 6) with the note "Voice is not set up yet."
-4. Read `schedule` from the brain: `goal`, `days`, `topics`, `watch`, `avoid`, `freshHours`. Today's weekday not in `days`: end quietly without writing anything.
+4. Read `schedule` from the brain: `goal`, `days`, `topics`, `watch`, `avoid`, `freshHours`, and the high-engagement share: `highShare` (percent of the goal, default 20), `minLikes` (default 50) and `minReplies` (default 50). Use the defaults for any of the three that are missing. Today's weekday not in `days`: end quietly without writing anything.
 
 ## 2. Read what already happened before deciding anything
 
@@ -41,6 +41,7 @@ Method rules:
 - Never add a likes filter (`min_faves`) to a latest-results query. It hides exactly the fresh posts you want.
 - Scroll with real scroll actions and wait for new posts to load. Scripted scrolling returns nothing and reports no error.
 - Read each candidate's full text, author handle, time and URL (`https://x.com/<handle>/status/<id>`). Open the tweet if the text is cut off.
+- **High-engagement pass.** The high-engagement quota is `round(goal × highShare / 100)`, so 4 of 20. A tweet counts as high engagement only when it has more than `minLikes` likes AND more than `minReplies` replies, as shown on the tweet when you read it. Find these with separate queries on the top tab: `https://x.com/search?q=<query> min_faves:<minLikes> min_replies:<minReplies> since:YYYY-MM-DD&src=typed_query` (no `f=live`). The likes-filter ban above is for latest-results queries only; this pass is the one place `min_faves` is allowed. Use the same topics, audience and watch accounts. Still check each count on the tweet itself, since search filters are approximate.
 - Gather roughly twice the goal before filtering, across at least five different queries, so no single query or account dominates. No single account may supply more than a quarter of the batch.
 
 ## 4. Judge every candidate and draft
@@ -67,6 +68,8 @@ python3 brain.py --brain FILE context --tweet "TEXT" --author handle --tier stra
 ```
 
 Follow it, keep the first reply (the matrix move) as the main draft and up to two others as alternates, then run `brain.py check --text` on the main draft. If it is blocked, rewrite it once. Blocked again: reject with `draft-failed` and the check's reason.
+
+Fill the high-engagement quota first, from candidates that pass every rule above. They get no easier bar: same audience, same matrix, same checks, and the same freshness floor. If fewer qualify, deliver fewer high-engagement drafts, fill the rest of the goal with normal ones, and say how many you found and why in `note` (for example "only 2 tweets in the audience cleared 50 likes and 50 replies today"). Never count a tweet as high engagement without having seen its numbers.
 
 Stop drafting once the goal is reached. Rank by: fits the matrix move cleanly, the author is in the audience, freshness, then whether a belief or fresh material applies.
 
@@ -96,6 +99,9 @@ ArtifactData `set`, collection `data/users/me/runs/days`, doc_id today's date (`
       "author": "handle",
       "tweet": "full text",
       "postedAt": "2026-11-16T07:12:00Z",
+      "likes": 0,
+      "replies": 0,
+      "highEngagement": false,
       "situation": "question",
       "move": "add",
       "reply": "the main draft",
@@ -111,13 +117,15 @@ ArtifactData `set`, collection `data/users/me/runs/days`, doc_id today's date (`
 }
 ```
 
+Every candidate carries `likes` and `replies` as read from the tweet (use `null` if they were not visible), and `highEngagement: true` only for the quota tweets. Add `"highTarget"` (the quota) and `"highFound"` (how many were delivered) at the top level of the batch.
+
 `status` is `done` when the goal was met or the shortfall is explained, and `partial` when the run stopped early with some results. Times are milliseconds. Keep every tweet's text under 600 characters and every rejected tweet under 200, and list at most 150 rejections so the document stays small.
 
 Also save the same JSON to `~/.reply-brain/runs/YYYY-MM-DD.json` as a backup.
 
 `feedbackUsed` has one entry per open note, saying plainly what changed. If a note could not be acted on in this batch (for example it is about a kind of tweet that did not come up), say that instead. The studio shows each line under the note. Never mark a note done: only the person does that.
 
-Finish with a four-line summary: drafts delivered against the goal, rejections by rule, the main cause of any shortfall, and how many of the person's notes were worked on.
+Finish with a five-line summary: drafts delivered against the goal, rejections by rule, the main cause of any shortfall, how many of the person's notes were worked on, and high-engagement drafts delivered against the quota.
 
 ## 6. When it breaks
 
